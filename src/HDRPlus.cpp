@@ -18,14 +18,14 @@ class HDRPlus {
 
     private:
 
-        const Buffer<uint16_t> imgs;
+        Buffer<uint16_t> imgs;
 
     public:
 
         // dimensions of pixel phone output images are 3036 x 4048
 
-        static const int width = 4208;
-        static const int height = 3120;
+        static const int width = 4032;
+        static const int height = 3024;
 
         const BlackPoint bp;
         const WhitePoint wp;
@@ -35,10 +35,10 @@ class HDRPlus {
 
         HDRPlus(Buffer<uint16_t> imgs, BlackPoint bp, WhitePoint wp, WhiteBalance wb, Compression c, Gain g) : imgs(imgs), bp(bp), wp(wp), wb(wb), c(c), g(g) {
 
-            assert(imgs.dimensions() == 3);         // width * height * img_idx
+            // assert(imgs.dimensions() == 3);         // width * height * img_idx
             assert(imgs.width() == width);
             assert(imgs.height() == height);
-            assert(imgs.extent(2) >= 2);            // must have at least one alternate image
+            // assert(imgs.extent(2) >= 2);            // must have at least one alternate image
         }
 
         /*
@@ -46,9 +46,10 @@ class HDRPlus {
          */
         Buffer<uint8_t> process() {
 
-            Func alignment = align(imgs);
-            Func merged = merge(imgs, alignment);
-            Func finished = finish(merged, width, height, bp, wp, wb, c, g);
+            // Func alignment = align(imgs);
+            // Func merged = merge(imgs, alignment);
+            Func inp_image = Func(imgs);
+            Func finished = finish(inp_image, width, height, bp, wp, wb, c, g);
 
             ///////////////////////////////////////////////////////////////////////////
             // realize image
@@ -73,11 +74,11 @@ class HDRPlus {
 
             int num_imgs = img_names.size();
 
-            imgs = Buffer<uint16_t>(width, height, num_imgs);
+            imgs = Buffer<uint16_t>(width, height);
 
             uint16_t *data = imgs.data();
 
-            for (int n = 0; n < num_imgs; n++) {
+            for (int n = 0; n < 1; n++) {
 
                 std::string img_name = img_names[n];
                 std::string img_path = dir_path + "/" + img_name;
@@ -142,7 +143,7 @@ const WhiteBalance read_white_balance(std::string file_path) {
 
 int main(int argc, char* argv[]) {
     
-    if (argc < 5) {
+    if (argc < 4) {
         std::cerr << "Usage: " << argv[0] << " [-c comp -g gain (optional)] dir_path out_img raw_img1 raw_img2 [...]" << std::endl;
         return 1;
     }
@@ -172,7 +173,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (argc - i < 4) {
+    if (argc - i < 3) {
         std::cerr << "Usage: " << argv[0] << " [-c comp -g gain (optional)] dir_path out_img raw_img1 raw_img2 [...]" << std::endl;
         return 1;
     }
