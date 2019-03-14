@@ -1,0 +1,1 @@
+./hdrplus 4KK2_20150823_152106_985/ result.png payload_N000.dng payload_N001.dng payload_N002.dng payload_N003.dng payload_N004.dng payload_N005.dng payload_N006.dng payload_N007.dng payload_N008.dng payload_N009.dng
