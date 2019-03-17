@@ -7,8 +7,25 @@
 #include "align.h"
 #include "merge.h"
 #include "finish.h"
-
+#include <tiffio.h>
+#include <cstring>
+#include <algorithm>
 using namespace Halide;
+
+void save_tiff(Buffer<uint16_t> img){
+    // TIFF *out= TIFFOpen("new.tiff", "w");
+    // y -> row index
+    // x -> column index
+    for (int y = 0; y < 10; ++y)
+    {
+        for (int x = 0; x < 10; ++x)
+        {
+            std::cout<<img(x,y)<<" ";
+        }
+        std::cout<<std::endl;
+    }
+}
+
 
 /*
  * HDRPlus Class -- Houses file I/O, defines pipeline attributes and calls
@@ -24,8 +41,8 @@ class HDRPlus {
 
         // dimensions of pixel phone output images are 3036 x 4048
 
-        static const int width = 4032;
-        static const int height = 3024;
+        static const int width = 4208;
+        static const int height = 3120;
 
         const BlackPoint bp;
         const WhitePoint wp;
@@ -45,11 +62,26 @@ class HDRPlus {
          * process -- Calls all of the main stages (align, merge, finish) of the pipeline.
          */
         Buffer<uint8_t> process() {
+            for (int i = 0; i < 10; ++i)
+            {
+                for (int j = 0; j < 10; ++j)
+                {
+                    std::cout<<imgs(j,i,0)<<" ";
+                }
+                std::cout<<std::endl;
+            }
 
-            // Func alignment = align(imgs);
-            // Func merged = merge(imgs, alignment);
-            Func inp_image = Func(imgs);
-            Func finished = finish(inp_image, width, height, bp, wp, wb, c, g);
+            Func alignment = align(imgs);
+            Func merged = merge(imgs, alignment);
+            Buffer<uint16_t> output_merged(width,height);
+            merged.realize(output_merged);
+            std::cout<<output_merged.width()<<"  "<<output_merged.height()<<std::endl;
+            save_tiff(output_merged);
+            std::cout<<"WhiteBalance"<<std::endl;
+            std::cout<<wb.r<<" "<<wb.g0<<" "<<wb.g1<<" "<<wb.b<<std::endl;
+
+            // Func inp_image = Func(imgs);
+            Func finished = finish(merged, width, height, bp, wp, wb, c, g);
 
             ///////////////////////////////////////////////////////////////////////////
             // realize image
@@ -58,7 +90,6 @@ class HDRPlus {
             Buffer<uint8_t> output_img(3, width, height);
 
             finished.realize(output_img);
-
             // transpose to account for interleaved layout
 
             output_img.transpose(0, 1);
@@ -74,11 +105,11 @@ class HDRPlus {
 
             int num_imgs = img_names.size();
 
-            imgs = Buffer<uint16_t>(width, height);
+            imgs = Buffer<uint16_t>(width, height, num_imgs);
 
             uint16_t *data = imgs.data();
 
-            for (int n = 0; n < 1; n++) {
+            for (int n = 0; n < num_imgs; n++) {
 
                 std::string img_name = img_names[n];
                 std::string img_path = dir_path + "/" + img_name;
@@ -115,6 +146,29 @@ class HDRPlus {
         }
 };
 
+void print_full(std::string file_path){
+    Tools::Internal::PipeOpener f(("../tools/dcraw -c -D -6 -W -g 1 1 " + file_path).c_str(), "r");
+    char buffer[1024];
+    char prev_buf[1024];
+    int times=0;
+    // n=memcmp ( buffer1, buffer2, sizeof(buffer1) );
+    while(f.f!=nullptr){
+        f.readLine(buffer,1024);
+        std::cout<<buffer;
+        if(times==0||std::memcmp(prev_buf,buffer,1024)!=0){
+            std::memcpy(prev_buf, buffer, 1024);
+            times=1;
+        }
+        else{
+            times++;
+        }
+        if(times==5){
+            break;
+        }
+    }
+    std::cout<<std::endl;
+}
+
 /*
  * read_white_balance -- Reads white balance multipliers from file and returns WhiteBalance.
  */
@@ -122,17 +176,30 @@ const WhiteBalance read_white_balance(std::string file_path) {
 
     Tools::Internal::PipeOpener f(("../tools/dcraw -v -i " + file_path).c_str(), "r");
     
+    // std::cout<<"Reading DNG"<<std::endl;
+    // print_full(file_path);
     char buf[1024];
 
     while(f.f != nullptr) {
 
         f.readLine(buf, 1024);
+        // std::cout<<buf<<std::endl;
 
         float r, g0, g1, b;
 
         if(sscanf(buf, "Camera multipliers: %f %f %f %f", &r, &g0, &b, &g1) == 4) {
 
-            float m = std::min(std::min(r, g0), std::min(g1, b));
+            // float m = std::min(std::min(r, g0), std::min(g1, b));
+            float wb[4] = {r, g0, g1, b};
+            float m=1;
+            std::sort(wb,wb+4);
+            for (int i = 0; i < 4; ++i)
+            {
+                if(wb[i]!=0){
+                    m=wb[i];
+                    break;
+                }
+            }
 
             return {r / m, g0 / m, g1 / m, b / m};
         }

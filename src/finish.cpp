@@ -676,16 +676,16 @@ Func finish(Func input, int width, int height, const BlackPoint bp, const WhiteP
 
     int denoise_passes = 1;
     float contrast_strength = 5.f;
-    int black_level = 2000;
+    int black_level = 32;
     float sharpen_strength = 2.f;
 
     // 1. Black-level subtraction and white-level scaling
 
-    Func black_white_level_output = black_white_level(Func(input), bp, wp);
+    // Func black_white_level_output = black_white_level(Func(input), bp, wp);
 
     // 2. White balancing
 
-    Func white_balance_output = white_balance(black_white_level_output, width, height, wb);
+    Func white_balance_output = white_balance(Func(input), width, height, wb);
 
     // 3. Demosaicking
 
@@ -713,7 +713,7 @@ Func finish(Func input, int width, int height, const BlackPoint bp, const WhiteP
 
     // 9. Sharpening
 
-    Func sharpen_output = sharpen(contrast_output, sharpen_strength);
+    // Func sharpen_output = sharpen(contrast_output, sharpen_strength);
 
     return u8bit_interleaved(contrast_output);
 }
