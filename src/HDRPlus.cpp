@@ -7,10 +7,13 @@
 #include "align.h"
 #include "merge.h"
 #include "finish.h"
+#include "CImg.h"
 #include <tiffio.h>
 #include <cstring>
 #include <algorithm>
 using namespace Halide;
+using namespace cimg_library;
+using namespace std;
 
 void save_tiff(Buffer<uint16_t> img){
     // TIFF *out= TIFFOpen("new.tiff", "w");
@@ -41,8 +44,8 @@ class HDRPlus {
 
         // dimensions of pixel phone output images are 3036 x 4048
 
-        static const int width = 4208;
-        static const int height = 3120;
+        int width;
+        int height;
 
         const BlackPoint bp;
         const WhitePoint wp;
@@ -53,9 +56,25 @@ class HDRPlus {
         HDRPlus(Buffer<uint16_t> imgs, BlackPoint bp, WhitePoint wp, WhiteBalance wb, Compression c, Gain g) : imgs(imgs), bp(bp), wp(wp), wb(wb), c(c), g(g) {
 
             // assert(imgs.dimensions() == 3);         // width * height * img_idx
-            assert(imgs.width() == width);
-            assert(imgs.height() == height);
+            // assert(imgs.width() == width);
+            width = imgs.width();
+            // assert(imgs.height() == height);
+            height = imgs.height();
+            cout<<"Setting width = "<<width<<"  and height = "<<height<<endl;
             // assert(imgs.extent(2) >= 2);            // must have at least one alternate image
+        }
+
+        Buffer<uint8_t> semi_process(){
+            Func finished = semi_finish(Func(imgs),width,height,c,g);
+            Buffer<uint8_t> output_img(3, width, height);
+
+            finished.realize(output_img);
+            // transpose to account for interleaved layout
+
+            output_img.transpose(0, 1);
+            output_img.transpose(1, 2);
+
+            return output_img;
         }
 
         /*
@@ -101,50 +120,50 @@ class HDRPlus {
         /*
          * load_raws -- Loads CR2 (Canon Raw) files into a Halide Image.
          */
-        static bool load_raws(std::string dir_path, std::vector<std::string> &img_names, Buffer<uint16_t> &imgs) {
+        // static bool load_raws(std::string dir_path, std::vector<std::string> &img_names, Buffer<uint16_t> &imgs) {
 
-            int num_imgs = img_names.size();
+        //     int num_imgs = img_names.size();
 
-            imgs = Buffer<uint16_t>(width, height, num_imgs);
+        //     imgs = Buffer<uint16_t>(width, height, num_imgs);
 
-            uint16_t *data = imgs.data();
+        //     uint16_t *data = imgs.data();
 
-            for (int n = 0; n < num_imgs; n++) {
+        //     for (int n = 0; n < num_imgs; n++) {
 
-                std::string img_name = img_names[n];
-                std::string img_path = dir_path + "/" + img_name;
+        //         std::string img_name = img_names[n];
+        //         std::string img_path = dir_path + "/" + img_name;
 
-                if(!Tools::load_raw(img_path, data, width, height)) {
+        //         if(!Tools::load_raw(img_path, data, width, height)) {
 
-                    std::cerr << "Input image failed to load" << std::endl;
-                    return false;
-                }
+        //             std::cerr << "Input image failed to load" << std::endl;
+        //             return false;
+        //         }
 
-                data += width * height;
-            }
-            return true;
-        }
-
-        /*
-         * save_png -- Writes an interleaved Halide image to an output file.
-         */
-        static bool save_png(std::string dir_path, std::string img_name, Buffer<uint8_t> &img) {
-
-            std::string img_path = dir_path + "/" + img_name;
-
-            std::remove(img_path.c_str());
-
-            int stride_in_bytes = img.width() * img.channels();
-
-            if(!stbi_write_png(img_path.c_str(), img.width(), img.height(), img.channels(), img.data(), stride_in_bytes)) {
-
-                std::cerr << "Unable to write output image '" << img_name << "'" << std::endl;
-                return false;
-            }
-
-            return true;
-        }
+        //         data += width * height;
+        //     }
+        //     return true;
+        // }
 };
+
+/*
+ * save_png -- Writes an interleaved Halide image to an output file.
+ */
+bool save_png(std::string dir_path, std::string img_name, Buffer<uint8_t> &img) {
+
+    std::string img_path = dir_path + "/" + img_name;
+
+    std::remove(img_path.c_str());
+
+    int stride_in_bytes = img.width() * img.channels();
+
+    if(!stbi_write_png(img_path.c_str(), img.width(), img.height(), img.channels(), img.data(), stride_in_bytes)) {
+
+        std::cerr << "Unable to write output image '" << img_name << "'" << std::endl;
+        return false;
+    }
+
+    return true;
+}
 
 void print_full(std::string file_path){
     Tools::Internal::PipeOpener f(("../tools/dcraw -c -D -6 -W -g 1 1 " + file_path).c_str(), "r");
@@ -174,38 +193,55 @@ void print_full(std::string file_path){
  */
 const WhiteBalance read_white_balance(std::string file_path) {
 
-    Tools::Internal::PipeOpener f(("../tools/dcraw -v -i " + file_path).c_str(), "r");
+    // Tools::Internal::PipeOpener f(("../tools/dcraw -v -i " + file_path).c_str(), "r");
     
     // std::cout<<"Reading DNG"<<std::endl;
     // print_full(file_path);
-    char buf[1024];
+    // char buf[1024];
 
-    while(f.f != nullptr) {
+    // while(f.f != nullptr) {
 
-        f.readLine(buf, 1024);
-        // std::cout<<buf<<std::endl;
+    //     f.readLine(buf, 1024);
+    //     // std::cout<<buf<<std::endl;
 
-        float r, g0, g1, b;
+    //     float r, g0, g1, b;
 
-        if(sscanf(buf, "Camera multipliers: %f %f %f %f", &r, &g0, &b, &g1) == 4) {
+    //     if(sscanf(buf, "Camera multipliers: %f %f %f %f", &r, &g0, &b, &g1) == 4) {
 
-            // float m = std::min(std::min(r, g0), std::min(g1, b));
-            float wb[4] = {r, g0, g1, b};
-            float m=1;
-            std::sort(wb,wb+4);
-            for (int i = 0; i < 4; ++i)
+    //         // float m = std::min(std::min(r, g0), std::min(g1, b));
+    //         float wb[4] = {r, g0, g1, b};
+    //         float m=1;
+    //         std::sort(wb,wb+4);
+    //         for (int i = 0; i < 4; ++i)
+    //         {
+    //             if(wb[i]!=0){
+    //                 m=wb[i];
+    //                 break;
+    //             }
+    //         }
+
+    //         return {r / m, g0 / m, g1 / m, b / m};
+    //     }
+    // }
+    // std::cout<<"Error occured"<<std::endl;
+    return {1, 1, 1, 1};
+}
+
+void load_png(std::string dir_path, std::vector<std::string> &img_names, Buffer<uint16_t> &imgs){
+    std::string img_path = dir_path + "/" + img_names[0];
+    CImg<float> image(img_path.c_str());
+    imgs = Buffer<uint16_t>(image.width(), image.height(), 3);
+    for (int i = 0; i < image.width(); ++i)
+    {
+        for (int j = 0; j < image.height(); ++j)
+        {
+            for (int c = 0; c < 3; ++c)
             {
-                if(wb[i]!=0){
-                    m=wb[i];
-                    break;
-                }
+                imgs(i,j,c)=image(i,j,0,c);
             }
-
-            return {r / m, g0 / m, g1 / m, b / m};
         }
     }
-
-    return {1, 1, 1, 1};
+    cout<<"Successfully read the png"<<endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -254,7 +290,9 @@ int main(int argc, char* argv[]) {
 
     Buffer<uint16_t> imgs;
 
-    if(!HDRPlus::load_raws(dir_path, in_names, imgs)) return -1;
+    load_png(dir_path, in_names, imgs);
+
+    // if(!HDRPlus::load_raws(dir_path, in_names, imgs)) return -1;
 
     const WhiteBalance wb = read_white_balance(dir_path + "/" + in_names[0]);
     const BlackPoint bp = 2050;
@@ -262,9 +300,11 @@ int main(int argc, char* argv[]) {
 
     HDRPlus hdr_plus = HDRPlus(imgs, bp, wp, wb, c, g);
 
-    Buffer<uint8_t> output = hdr_plus.process();
+    Buffer<uint8_t> output = hdr_plus.semi_process();
+
+    // Buffer<uint8_t> output = hdr_plus.process();
     
-    if(!HDRPlus::save_png(dir_path, out_name, output)) return -1;
+    if(!save_png(dir_path, out_name, output)) return -1;
 
     return 0;
 }

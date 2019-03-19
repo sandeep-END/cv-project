@@ -26,4 +26,5 @@ typedef float Gain;
  */
 Halide::Func finish(Halide::Func input, int width, int height, const BlackPoint bp, const WhitePoint wp, const WhiteBalance &wb, const Compression c, const Gain g);
 
+Halide::Func semi_finish(Halide::Func input, int width, int height, const Compression c, const Gain g);
 #endif

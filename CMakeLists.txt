@@ -23,4 +23,4 @@ link_directories(${HALIDE_ROOT_DIR}/bin ${HALIDE_ROOT_DIR}/lib)
 
 add_executable(hdrplus ${src_files})
 
-target_link_libraries(hdrplus Halide png)
+target_link_libraries(hdrplus Halide png m pthread X11)

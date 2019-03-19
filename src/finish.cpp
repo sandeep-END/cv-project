@@ -652,7 +652,6 @@ Func u8bit_interleaved(Func input) {
     Var c, x, y;
 
     // Convert to 8 bit
-
     output(c, x, y) = u8_sat(input(x, y, c) / 256);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -662,6 +661,41 @@ Func u8bit_interleaved(Func input) {
     output.compute_root().parallel(y).vectorize(x, 16);
 
     return output;
+}
+
+Halide::Func semi_finish(Halide::Func input, int width, int height, const Compression c, const Gain g){
+
+    int denoise_passes = 1;
+    float contrast_strength = 5.f;
+    int black_level = 2000;
+
+    Func tone_map_output = tone_map(Func(input), width, height, c, g);
+    Func gamma_correct_output = gamma_correct(tone_map_output);
+
+    Func contrast_output = contrast(gamma_correct_output, contrast_strength, black_level);
+    // Func sharpen_output = sharpen(contrast_output, sharpen_strength);
+    // Buffer<uint16_t> temp(width,height,3);
+    // contrast_output.realize(temp);
+    // double avg=0;
+    // int maxv=0,minv=65535;
+    // double iN = height*width*3;
+    // iN=1.0/iN;
+    // for (int i = 0; i < width; ++i)
+    // {
+    //     for (int j = 0; j < height; ++j)
+    //     {
+    //         for (int c = 0; c < 3; ++c)
+    //         {
+    //             avg += temp(i,j,c)*iN;
+    //             maxv = std::max(maxv,(int)temp(i,j,c));
+    //             minv = std::min(minv,(int)temp(i,j,c));
+    //         }
+    //     }
+    // }
+    // std::cout<<"Avg = "<<avg<<std::endl;
+    // std::cout<<"Max = "<<maxv<<std::endl;
+    // std::cout<<"Min = "<<minv<<std::endl;
+    return u8bit_interleaved(contrast_output);
 }
 
 /*
